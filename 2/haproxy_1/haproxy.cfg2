@@ -1,0 +1,50 @@
+global
+  daemon
+  stats socket /var/run/haproxy.sock mode 600 level admin
+  stats timeout 2m
+
+defaults
+  log 127.0.0.1 local0
+  mode tcp
+  option tcplog
+  option  dontlognull
+  timeout connect 5000ms
+  timeout client 50000ms
+  timeout server 50000ms
+
+frontend port8088
+  mode tcp
+  bind *:8088 name rdp
+  log global
+  option tcplog
+  tcp-request inspect-delay 2s
+  tcp-request content accept if RDP_COOKIE
+  default_backend WebServs
+
+backend WebServs
+  mode tcp
+  balance roundrobin 
+#leastconn
+  timeout server 5s
+  timeout connect 4s
+  log global
+  option tcplog
+  stick-table type string len 32 size 10k expire 8h
+  stick on rdp_cookie(mstshash),bytes(0,6)
+
+  stick on rdp_cookie(mstshash)
+  option tcp-check
+  tcp-check connect port 8088
+  default-server inter 3s rise 2 fall 3
+  server PyWebServ_01 127.0.0.1:9001 weight 10 check
+  server PyWebServ_02 127.0.0.1:9002 weight 10 check
+  #server TS08 172.16.50.18:3389 weight 20 check
+  
+listen stats 
+  bind *:9000
+  mode http
+  stats enable
+  #stats hide-version
+  stats show-node
+  stats realm Haproxy\ Statistics
+  stats uri /
